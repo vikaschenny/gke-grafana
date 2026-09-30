@@ -1,0 +1,201 @@
+{{- if and .Values.networkPolicy.enabled .Values.networkPolicy.defaultDeny }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "observability.fullname" . }}-default-deny
+  namespace: {{ include "observability.namespace" . }}
+  labels:
+    {{- include "observability.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+{{- end }}
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "observability.fullname" . }}-allow-dns
+  namespace: {{ include "observability.namespace" . }}
+  labels:
+    {{- include "observability.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+{{- if .Values.networkPolicy.allowHttpsEgress }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "observability.fullname" . }}-allow-https-egress
+  namespace: {{ include "observability.namespace" . }}
+  labels:
+    {{- include "observability.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+        - protocol: TCP
+          port: 443
+{{- end }}
+{{- if .Values.grafana.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "observability.grafana.fullname" . }}-ingress
+  namespace: {{ include "observability.namespace" . }}
+  labels:
+    {{- include "observability.grafana.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "observability.grafana.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector: {}
+        - ipBlock:
+            cidr: 0.0.0.0/0
+        - ipBlock:
+            cidr: 35.191.0.0/16
+        - ipBlock:
+            cidr: 130.211.0.0/22
+      ports:
+        - protocol: TCP
+          port: 3000
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "observability.prometheus.selectorLabels" . | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 9090
+{{- end }}
+{{- if .Values.prometheus.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "observability.prometheus.fullname" . }}-ingress
+  namespace: {{ include "observability.namespace" . }}
+  labels:
+    {{- include "observability.prometheus.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "observability.prometheus.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "observability.grafana.selectorLabels" . | nindent 14 }}
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 9090
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "observability.nodeExporter.selectorLabels" . | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 9100
+    # Kubernetes API + kubelet / pod scrapes
+    - ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 6443
+        - protocol: TCP
+          port: 10250
+        - protocol: TCP
+          port: 9090
+        - protocol: TCP
+          port: 9100
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 80
+{{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "observability.fullname" . }}-helm-test
+  namespace: {{ include "observability.namespace" . }}
+  labels:
+    {{- include "observability.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: helm-test
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "observability.grafana.selectorLabels" . | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 3000
+        - protocol: TCP
+          port: 80
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "observability.prometheus.selectorLabels" . | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 9090
+{{- if .Values.nodeExporter.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "observability.nodeExporter.fullname" . }}-ingress
+  namespace: {{ include "observability.namespace" . }}
+  labels:
+    {{- include "observability.nodeExporter.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "observability.nodeExporter.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "observability.prometheus.selectorLabels" . | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 9100
+{{- end }}
+{{- end }}

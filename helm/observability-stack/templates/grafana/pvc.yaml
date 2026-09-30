@@ -1,0 +1,19 @@
+{{- if and .Values.grafana.enabled .Values.grafana.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "observability.grafana.fullname" . }}
+  namespace: {{ include "observability.namespace" . }}
+  labels:
+    {{- include "observability.grafana.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    {{- toYaml .Values.grafana.persistence.accessModes | nindent 4 }}
+  resources:
+    requests:
+      storage: {{ .Values.grafana.persistence.size }}
+  {{- $sc := .Values.grafana.persistence.storageClass | default .Values.global.storageClass }}
+  {{- if $sc }}
+  storageClassName: {{ $sc | quote }}
+  {{- end }}
+{{- end }}

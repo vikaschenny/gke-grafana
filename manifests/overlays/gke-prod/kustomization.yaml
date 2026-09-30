@@ -1,0 +1,6 @@
+# Optional: add a real hostname and ManagedCertificate here later.
+# Default apply path (manifests/) already publishes Grafana on the public Ingress IP.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../

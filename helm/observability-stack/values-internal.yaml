@@ -1,0 +1,24 @@
+# Private GKE Ingress overlay (recommended for MNC / production).
+# Pair with an Internal HTTPS Load Balancer and private DNS.
+
+grafana:
+  ingress:
+    enabled: true
+    className: gce-internal
+    host: grafana.internal.example.com
+    annotations:
+      networking.gke.io/managed-certificates: grafana-cert
+      networking.gke.io/v1beta1.FrontendConfig: grafana-frontend
+
+prometheus:
+  ingress:
+    enabled: true
+    className: gce-internal
+    host: prometheus.internal.example.com
+    annotations:
+      networking.gke.io/managed-certificates: prometheus-cert
+      networking.gke.io/v1beta1.FrontendConfig: prometheus-frontend
+
+nodeExporter:
+  ingress:
+    enabled: false

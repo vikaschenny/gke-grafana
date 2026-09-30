@@ -1,0 +1,75 @@
+{{- if and .Values.nodeExporter.enabled .Values.nodeExporter.ingress.enabled }}
+{{- if .Values.nodeExporter.managedCertificate.enabled }}
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: {{ .Values.nodeExporter.managedCertificate.name }}
+  namespace: {{ include "observability.namespace" . }}
+  labels:
+    {{- include "observability.nodeExporter.labels" . | nindent 4 }}
+spec:
+  domains:
+    - {{ .Values.nodeExporter.ingress.host }}
+---
+{{- end }}
+{{- if .Values.nodeExporter.frontendConfig.enabled }}
+apiVersion: networking.gke.io/v1beta1
+kind: FrontendConfig
+metadata:
+  name: {{ .Values.nodeExporter.frontendConfig.name }}
+  namespace: {{ include "observability.namespace" . }}
+  labels:
+    {{- include "observability.nodeExporter.labels" . | nindent 4 }}
+spec:
+  redirectToHttps:
+    enabled: true
+    responseCodeName: MOVED_PERMANENTLY_DEFAULT
+---
+{{- end }}
+{{- if .Values.nodeExporter.backendConfig.enabled }}
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: {{ .Values.nodeExporter.backendConfig.name }}
+  namespace: {{ include "observability.namespace" . }}
+  labels:
+    {{- include "observability.nodeExporter.labels" . | nindent 4 }}
+spec:
+  timeoutSec: {{ .Values.nodeExporter.backendConfig.timeoutSec }}
+  healthCheck:
+    checkIntervalSec: {{ .Values.nodeExporter.backendConfig.healthCheck.checkIntervalSec }}
+    timeoutSec: {{ .Values.nodeExporter.backendConfig.healthCheck.timeoutSec }}
+    type: {{ .Values.nodeExporter.backendConfig.healthCheck.type }}
+    requestPath: {{ .Values.nodeExporter.backendConfig.healthCheck.requestPath }}
+    port: {{ .Values.nodeExporter.backendConfig.healthCheck.port }}
+  {{- if .Values.nodeExporter.backendConfig.securityPolicy }}
+  securityPolicy:
+    name: {{ .Values.nodeExporter.backendConfig.securityPolicy }}
+  {{- end }}
+---
+{{- end }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "observability.nodeExporter.fullname" . }}
+  namespace: {{ include "observability.namespace" . }}
+  labels:
+    {{- include "observability.nodeExporter.labels" . | nindent 4 }}
+  annotations:
+    {{- with .Values.nodeExporter.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: {{ .Values.nodeExporter.ingress.className }}
+  rules:
+    - host: {{ .Values.nodeExporter.ingress.host }}
+      http:
+        paths:
+          - path: {{ .Values.nodeExporter.ingress.path }}
+            pathType: {{ .Values.nodeExporter.ingress.pathType }}
+            backend:
+              service:
+                name: {{ include "observability.nodeExporter.fullname" . }}
+                port:
+                  number: {{ .Values.nodeExporter.service.port }}
+{{- end }}

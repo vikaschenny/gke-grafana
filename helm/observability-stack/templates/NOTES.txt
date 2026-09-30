@@ -1,0 +1,28 @@
+Observability stack is installed in namespace {{ include "observability.namespace" . }}.
+
+Grafana
+  Service:  {{ include "observability.grafana.fullname" . }}.{{ include "observability.namespace" . }}.svc
+  Public:   kubectl get ingress {{ include "observability.grafana.fullname" . }} -n {{ include "observability.namespace" . }}
+            then open http://<ADDRESS>
+  User:     {{ .Values.grafana.adminUser }}
+  Password: kubectl get secret {{ include "observability.grafana.secretName" . }} -n {{ include "observability.namespace" . }} -o jsonpath="{.data.admin-password}" | base64 -d
+
+Prometheus
+  Service:  {{ include "observability.prometheus.fullname" . }}.{{ include "observability.namespace" . }}.svc:9090
+  URL:      https://{{ .Values.prometheus.ingress.host }}
+
+Node Exporter
+  DaemonSet on every schedulable node (tolerates all taints)
+  Scrape:   {{ include "observability.nodeExporter.fullname" . }}.{{ include "observability.namespace" . }}.svc:9100
+  Ingress:  {{ if .Values.nodeExporter.ingress.enabled }}ENABLED — restrict to internal only{{ else }}disabled (recommended){{ end }}
+
+Post-install checks
+  kubectl get pods,svc,ingress,pdb -n {{ include "observability.namespace" . }}
+  kubectl get daemonset -n {{ include "observability.namespace" . }}
+  helm test {{ .Release.Name }} -n {{ include "observability.namespace" . }}
+
+Security
+  - Namespace uses Pod Security Restricted
+  - NetworkPolicy default-deny is {{ .Values.networkPolicy.enabled }}
+  - Node Exporter hostPath/hostNetwork is a documented exception; metrics stay cluster-internal
+  - Rotate the Grafana admin secret and bind IAP / Cloud Armor before exposing Ingress

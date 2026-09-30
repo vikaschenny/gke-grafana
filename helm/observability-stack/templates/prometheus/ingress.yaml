@@ -1,0 +1,75 @@
+{{- if and .Values.prometheus.enabled .Values.prometheus.ingress.enabled }}
+{{- if .Values.prometheus.managedCertificate.enabled }}
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: {{ .Values.prometheus.managedCertificate.name }}
+  namespace: {{ include "observability.namespace" . }}
+  labels:
+    {{- include "observability.prometheus.labels" . | nindent 4 }}
+spec:
+  domains:
+    - {{ .Values.prometheus.ingress.host }}
+---
+{{- end }}
+{{- if .Values.prometheus.frontendConfig.enabled }}
+apiVersion: networking.gke.io/v1beta1
+kind: FrontendConfig
+metadata:
+  name: {{ .Values.prometheus.frontendConfig.name }}
+  namespace: {{ include "observability.namespace" . }}
+  labels:
+    {{- include "observability.prometheus.labels" . | nindent 4 }}
+spec:
+  redirectToHttps:
+    enabled: true
+    responseCodeName: MOVED_PERMANENTLY_DEFAULT
+---
+{{- end }}
+{{- if .Values.prometheus.backendConfig.enabled }}
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: {{ .Values.prometheus.backendConfig.name }}
+  namespace: {{ include "observability.namespace" . }}
+  labels:
+    {{- include "observability.prometheus.labels" . | nindent 4 }}
+spec:
+  timeoutSec: {{ .Values.prometheus.backendConfig.timeoutSec }}
+  healthCheck:
+    checkIntervalSec: {{ .Values.prometheus.backendConfig.healthCheck.checkIntervalSec }}
+    timeoutSec: {{ .Values.prometheus.backendConfig.healthCheck.timeoutSec }}
+    type: {{ .Values.prometheus.backendConfig.healthCheck.type }}
+    requestPath: {{ .Values.prometheus.backendConfig.healthCheck.requestPath }}
+    port: {{ .Values.prometheus.backendConfig.healthCheck.port }}
+  {{- if .Values.prometheus.backendConfig.securityPolicy }}
+  securityPolicy:
+    name: {{ .Values.prometheus.backendConfig.securityPolicy }}
+  {{- end }}
+---
+{{- end }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "observability.prometheus.fullname" . }}
+  namespace: {{ include "observability.namespace" . }}
+  labels:
+    {{- include "observability.prometheus.labels" . | nindent 4 }}
+  annotations:
+    {{- with .Values.prometheus.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: {{ .Values.prometheus.ingress.className }}
+  rules:
+    - host: {{ .Values.prometheus.ingress.host }}
+      http:
+        paths:
+          - path: {{ .Values.prometheus.ingress.path }}
+            pathType: {{ .Values.prometheus.ingress.pathType }}
+            backend:
+              service:
+                name: {{ include "observability.prometheus.fullname" . }}
+                port:
+                  number: {{ .Values.prometheus.service.port }}
+{{- end }}

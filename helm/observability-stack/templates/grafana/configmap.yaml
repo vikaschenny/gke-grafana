@@ -1,0 +1,67 @@
+{{- if .Values.grafana.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "observability.grafana.fullname" . }}-config
+  namespace: {{ include "observability.namespace" . }}
+  labels:
+    {{- include "observability.grafana.labels" . | nindent 4 }}
+data:
+  grafana.ini: |
+    [server]
+    protocol = http
+    http_port = 3000
+    {{- if .Values.grafana.ingress.host }}
+    root_url = {{ if .Values.grafana.ingress.tls }}https{{ else }}http{{ end }}://{{ .Values.grafana.ingress.host }}
+    {{- else }}
+    root_url = %(protocol)s://%(domain)s/
+    {{- end }}
+    enable_gzip = true
+    [security]
+    disable_initial_admin_creation = false
+    cookie_secure = {{ if .Values.grafana.ingress.tls }}true{{ else }}false{{ end }}
+    cookie_samesite = lax
+    strict_transport_security = {{ if .Values.grafana.ingress.tls }}true{{ else }}false{{ end }}
+    strict_transport_security_max_age_seconds = 31536000
+    x_content_type_options = true
+    x_xss_protection = true
+    [users]
+    allow_sign_up = false
+    allow_org_create = false
+    [auth.anonymous]
+    enabled = false
+    [snapshots]
+    external_enabled = false
+    [analytics]
+    reporting_enabled = false
+    check_for_updates = false
+    [log]
+    mode = console
+    level = info
+    [paths]
+    data = /var/lib/grafana
+    logs = /var/log/grafana
+    plugins = /var/lib/grafana/plugins
+    provisioning = /etc/grafana/provisioning
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "observability.grafana.fullname" . }}-datasources
+  namespace: {{ include "observability.namespace" . }}
+  labels:
+    {{- include "observability.grafana.labels" . | nindent 4 }}
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://{{ include "observability.prometheus.fullname" . }}.{{ include "observability.namespace" . }}.svc.cluster.local:9090
+        isDefault: true
+        editable: false
+        jsonData:
+          timeInterval: {{ .Values.prometheus.scrapeInterval | quote }}
+          httpMethod: POST
+{{- end }}

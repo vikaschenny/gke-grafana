@@ -1,0 +1,51 @@
+# Node Exporter Ingress is OFF by default (host metrics must stay cluster-internal).
+# Prometheus scrapes the headless Service. Enable only with an internal GKE Ingress
+# and Cloud Armor / IAP if your standard requires a URL.
+#
+# To enable: uncomment the resources below and add this file is already in kustomization.
+# Recommended class: gce-internal
+#
+# apiVersion: networking.gke.io/v1
+# kind: ManagedCertificate
+# metadata:
+#   name: node-exporter-cert
+#   namespace: observability
+# spec:
+#   domains:
+#     - node-exporter.internal.example.com
+# ---
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: node-exporter
+#   namespace: observability
+#   annotations:
+#     kubernetes.io/ingress.class: gce-internal
+#     networking.gke.io/managed-certificates: node-exporter-cert
+# spec:
+#   ingressClassName: gce-internal
+#   rules:
+#     - host: node-exporter.internal.example.com
+#       http:
+#         paths:
+#           - path: /metrics
+#             pathType: Prefix
+#             backend:
+#               service:
+#                 name: node-exporter
+#                 port:
+#                   number: 9100
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: node-exporter-ingress-policy
+  namespace: observability
+  labels:
+    app.kubernetes.io/name: node-exporter
+    app.kubernetes.io/component: node-exporter
+  annotations:
+    description: Public Node Exporter Ingress is disabled. Metrics are scraped in-cluster only.
+data:
+  policy: disabled
+  scrape_service: node-exporter.observability.svc.cluster.local:9100

@@ -1,0 +1,139 @@
+{{- if .Values.grafana.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "observability.grafana.fullname" . }}
+  namespace: {{ include "observability.namespace" . }}
+  labels:
+    {{- include "observability.grafana.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.grafana.replicaCount }}
+  revisionHistoryLimit: 5
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "observability.grafana.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "observability.grafana.labels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/grafana/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/grafana/secret.yaml") . | sha256sum }}
+    spec:
+      {{- include "observability.imagePullSecrets" . | nindent 6 }}
+      serviceAccountName: {{ default (include "observability.grafana.fullname" .) .Values.grafana.serviceAccount.name }}
+      automountServiceAccountToken: false
+      {{- if .Values.priorityClass.create }}
+      priorityClassName: {{ .Values.priorityClass.name }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.grafana.securityContext | nindent 8 }}
+      terminationGracePeriodSeconds: 30
+      {{- with .Values.grafana.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.grafana.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.grafana.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.grafana.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: grafana
+          image: {{ include "observability.image" (dict "image" .Values.grafana.image "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.grafana.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.grafana.containerSecurityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "observability.grafana.secretName" . }}
+                  key: {{ .Values.grafana.existingSecretUserKey }}
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "observability.grafana.secretName" . }}
+                  key: {{ .Values.grafana.existingSecretPasswordKey }}
+            - name: GF_PATHS_DATA
+              value: /var/lib/grafana
+            - name: GF_PATHS_LOGS
+              value: /var/log/grafana
+            - name: GF_PATHS_PLUGINS
+              value: /var/lib/grafana/plugins
+            - name: GF_PATHS_PROVISIONING
+              value: /etc/grafana/provisioning
+            {{- range $key, $value := .Values.grafana.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.grafana.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/grafana/grafana.ini
+              subPath: grafana.ini
+              readOnly: true
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources
+              readOnly: true
+            - name: storage
+              mountPath: /var/lib/grafana
+            - name: tmp
+              mountPath: /tmp
+            - name: logs
+              mountPath: /var/log/grafana
+            {{- with .Values.grafana.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "observability.grafana.fullname" . }}-config
+        - name: datasources
+          configMap:
+            name: {{ include "observability.grafana.fullname" . }}-datasources
+        - name: tmp
+          emptyDir: {}
+        - name: logs
+          emptyDir: {}
+        - name: storage
+          {{- if .Values.grafana.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "observability.grafana.fullname" . }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        {{- with .Values.grafana.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+{{- end }}

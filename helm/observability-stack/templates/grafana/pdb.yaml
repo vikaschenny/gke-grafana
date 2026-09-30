@@ -1,0 +1,14 @@
+{{- if and .Values.grafana.enabled .Values.grafana.podDisruptionBudget.enabled (gt (int .Values.grafana.replicaCount) 1) }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "observability.grafana.fullname" . }}
+  namespace: {{ include "observability.namespace" . }}
+  labels:
+    {{- include "observability.grafana.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.grafana.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "observability.grafana.selectorLabels" . | nindent 6 }}
+{{- end }}

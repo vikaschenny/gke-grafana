@@ -1,0 +1,15 @@
+*.tgz
+*.bak
+.DS_Store
+.idea/
+.vscode/
+*.swp
+charts/*.tgz
+helm/**/charts/
+.helm/
+secrets/
+*.pem
+*.key
+.env
+.env.*
+!docs/**

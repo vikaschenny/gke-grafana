@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: observability
+  labels:
+    app.kubernetes.io/name: observability-stack
+    app.kubernetes.io/part-of: observability-stack
+    compliance: mnc-standard
+    # baseline enforce allows Node Exporter hostPath/hostNetwork.
+    # warn/audit restricted keeps Grafana and Prometheus CIS-aligned.
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    description: Isolated observability namespace with MNC security controls

@@ -1,0 +1,376 @@
+# Default values for observability-stack
+# Override environment-specific settings in values-gke.yaml
+
+nameOverride: ""
+fullnameOverride: ""
+
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  # GKE Workload Identity project / GSA prefix
+  gcpProjectId: ""
+  storageClass: "standard-rwo"
+
+commonLabels:
+  environment: production
+  compliance: mnc-standard
+  data-classification: internal
+
+namespace:
+  create: true
+  name: observability
+  labels:
+    # baseline enforce: Node Exporter needs hostPath/hostNetwork (restricted would block it).
+    # warn/audit stay restricted so Grafana and Prometheus stay CIS-aligned.
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+    # Node Exporter requires a documented PSS exception at the workload level
+    goldilocks.fairwinds.com/enabled: "true"
+
+priorityClass:
+  create: true
+  name: observability-critical
+  value: 1000000
+  description: Keep monitoring workloads scheduled during node pressure
+
+resourceQuota:
+  enabled: true
+  hard:
+    pods: "50"
+    requests.cpu: "8"
+    requests.memory: 16Gi
+    limits.cpu: "16"
+    limits.memory: 32Gi
+    persistentvolumeclaims: "8"
+    services: "12"
+    secrets: "20"
+    configmaps: "20"
+
+limitRange:
+  enabled: true
+  default:
+    cpu: 500m
+    memory: 512Mi
+  defaultRequest:
+    cpu: 50m
+    memory: 64Mi
+  max:
+    cpu: "4"
+    memory: 8Gi
+
+networkPolicy:
+  enabled: true
+  # Default-deny all ingress/egress, then allow only required paths
+  defaultDeny: true
+  # DNS (kube-dns / Cloud DNS)
+  allowKubeDNS: true
+  # Allow Grafana to reach Prometheus, Prometheus to scrape Node Exporter
+  # Egress to GCP APIs / container registries is allowed via HTTPS 443
+  allowHttpsEgress: true
+
+grafana:
+  enabled: true
+  replicaCount: 1
+  image:
+    registry: ""
+    repository: grafana/grafana
+    tag: "11.4.0"
+    pullPolicy: IfNotPresent
+  serviceAccount:
+    create: true
+    name: ""
+    annotations: {}
+    # GKE Workload Identity example:
+    # iam.gke.io/gcp-service-account: grafana@PROJECT_ID.iam.gserviceaccount.com
+  adminUser: admin
+  # Leave empty to auto-generate a 24-char password on first install.
+  # Prefer existingSecret in production (External Secrets / GSM).
+  adminPassword: ""
+  existingSecret: ""
+  existingSecretUserKey: admin-user
+  existingSecretPasswordKey: admin-password
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 3000
+    annotations:
+      cloud.google.com/neg: '{"ingress": true}'
+      cloud.google.com/backend-config: '{"default": "grafana-backend"}'
+  persistence:
+    enabled: true
+    storageClass: ""
+    size: 10Gi
+    accessModes:
+      - ReadWriteOnce
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 472
+    runAsGroup: 472
+    fsGroup: 472
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 472
+    capabilities:
+      drop:
+        - ALL
+    seccompProfile:
+      type: RuntimeDefault
+  env:
+    GF_USERS_ALLOW_SIGN_UP: "false"
+    GF_USERS_ALLOW_ORG_CREATE: "false"
+    GF_AUTH_ANONYMOUS_ENABLED: "false"
+    GF_SECURITY_DISABLE_GRAVATAR: "true"
+    GF_SECURITY_COOKIE_SECURE: "false"
+    GF_SECURITY_COOKIE_SAMESITE: lax
+    GF_SECURITY_STRICT_TRANSPORT_SECURITY: "false"
+    GF_SECURITY_STRICT_TRANSPORT_SECURITY_MAX_AGE_SECONDS: "31536000"
+    GF_SECURITY_STRICT_TRANSPORT_SECURITY_PRELOAD: "true"
+    GF_SECURITY_X_CONTENT_TYPE_OPTIONS: "true"
+    GF_SECURITY_X_XSS_PROTECTION: "true"
+    GF_SNAPSHOTS_EXTERNAL_ENABLED: "false"
+    GF_ANALYTICS_REPORTING_ENABLED: "false"
+    GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    GF_LOG_MODE: console
+    GF_LOG_LEVEL: info
+  extraVolumeMounts: []
+  extraVolumes: []
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  topologySpreadConstraints: []
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+  ingress:
+    enabled: true
+    className: gce
+    # Empty host = public access on the GKE Ingress IP (http://<ADDRESS>).
+    # Set a real hostname later if you add DNS + ManagedCertificate.
+    host: ""
+    path: /
+    pathType: Prefix
+    tls: false
+    annotations: {}
+  managedCertificate:
+    enabled: false
+    name: grafana-cert
+  frontendConfig:
+    enabled: false
+    name: grafana-frontend
+  backendConfig:
+    enabled: true
+    name: grafana-backend
+    healthCheck:
+      requestPath: /api/health
+      port: 3000
+      type: HTTP
+      checkIntervalSec: 15
+      timeoutSec: 5
+    timeoutSec: 60
+    # Optional Cloud Armor policy name
+    securityPolicy: ""
+
+prometheus:
+  enabled: true
+  replicaCount: 1
+  image:
+    registry: ""
+    repository: prom/prometheus
+    tag: v2.55.1
+    pullPolicy: IfNotPresent
+  serviceAccount:
+    create: true
+    name: ""
+    annotations: {}
+  rbac:
+    create: true
+  retention: 15d
+  retentionSize: 40GB
+  scrapeInterval: 30s
+  evaluationInterval: 30s
+  enableLifecycle: false
+  service:
+    type: ClusterIP
+    port: 9090
+    targetPort: 9090
+    annotations:
+      cloud.google.com/neg: '{"ingress": true}'
+      cloud.google.com/backend-config: '{"default": "prometheus-backend"}'
+  persistence:
+    enabled: true
+    storageClass: ""
+    size: 50Gi
+    accessModes:
+      - ReadWriteOnce
+  resources:
+    requests:
+      cpu: 250m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 4Gi
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    runAsGroup: 65534
+    fsGroup: 65534
+    fsGroupChangePolicy: OnRootMismatch
+    seccompProfile:
+      type: RuntimeDefault
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 65534
+    capabilities:
+      drop:
+        - ALL
+    seccompProfile:
+      type: RuntimeDefault
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+  ingress:
+    enabled: false
+    className: gce
+    host: prometheus.example.com
+    path: /
+    pathType: Prefix
+    tls: true
+    annotations:
+      networking.gke.io/managed-certificates: prometheus-cert
+      networking.gke.io/v1beta1.FrontendConfig: prometheus-frontend
+  managedCertificate:
+    enabled: true
+    name: prometheus-cert
+  frontendConfig:
+    enabled: true
+    name: prometheus-frontend
+  backendConfig:
+    enabled: true
+    name: prometheus-backend
+    healthCheck:
+      requestPath: /-/ready
+      port: 9090
+      type: HTTP
+      checkIntervalSec: 15
+      timeoutSec: 5
+    timeoutSec: 60
+    securityPolicy: ""
+
+nodeExporter:
+  enabled: true
+  image:
+    registry: ""
+    repository: prom/node-exporter
+    tag: v1.8.2
+    pullPolicy: IfNotPresent
+  serviceAccount:
+    create: true
+    name: ""
+    annotations: {}
+  # Required so the DaemonSet lands on every node, including tainted pools
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  hostNetwork: true
+  hostPID: true
+  service:
+    type: ClusterIP
+    clusterIP: None
+    port: 9100
+    targetPort: 9100
+    annotations: {}
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+  # Host-level collectors need a documented PSS exception (hostPath / hostNetwork).
+  # Container still drops all capabilities and runs as nobody.
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    runAsGroup: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 65534
+    capabilities:
+      drop:
+        - ALL
+    seccompProfile:
+      type: RuntimeDefault
+  extraArgs:
+    - --path.procfs=/host/proc
+    - --path.sysfs=/host/sys
+    - --path.rootfs=/host/root
+    - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+|var/lib/kubelet/.+)($|/)
+    - --collector.netclass.ignored-devices=^(veth.*|cali.*|tunl.*|flannel.*)$
+    - --web.disable-exporter-metrics
+  # Tolerate every taint so the exporter runs cluster-wide
+  tolerations:
+    - operator: Exists
+      effect: NoSchedule
+    - operator: Exists
+      effect: NoExecute
+  nodeSelector:
+    kubernetes.io/os: linux
+  affinity: {}
+  priorityClassName: ""
+  # Public Ingress for Node Exporter is OFF. Host metrics must not be internet-facing.
+  # Prometheus scrapes the headless Service inside the cluster.
+  ingress:
+    enabled: false
+    className: gce-internal
+    host: node-exporter.internal.example.com
+    path: /metrics
+    pathType: Prefix
+    tls: true
+    annotations:
+      networking.gke.io/managed-certificates: node-exporter-cert
+  managedCertificate:
+    enabled: false
+    name: node-exporter-cert
+  frontendConfig:
+    enabled: false
+    name: node-exporter-frontend
+  backendConfig:
+    enabled: false
+    name: node-exporter-backend
+    healthCheck:
+      requestPath: /metrics
+      port: 9100
+      type: HTTP
+      checkIntervalSec: 30
+      timeoutSec: 5
+    timeoutSec: 30
+    securityPolicy: ""
+
+ingress:
+  # Shared GKE ingress settings
+  staticIpName: ""
+  # Use gce-internal for private Grafana/Prometheus (recommended for MNC)
+  internal: false

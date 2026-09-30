@@ -1,0 +1,22 @@
+{{- if .Values.grafana.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "observability.grafana.fullname" . }}
+  namespace: {{ include "observability.namespace" . }}
+  labels:
+    {{- include "observability.grafana.labels" . | nindent 4 }}
+  {{- with .Values.grafana.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.grafana.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.grafana.service.port }}
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "observability.grafana.selectorLabels" . | nindent 4 }}
+{{- end }}

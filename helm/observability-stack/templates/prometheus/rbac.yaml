@@ -1,0 +1,44 @@
+{{- if and .Values.prometheus.enabled .Values.prometheus.rbac.create }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "observability.prometheus.fullname" . }}
+  labels:
+    {{- include "observability.prometheus.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources:
+      - nodes
+      - nodes/proxy
+      - nodes/metrics
+      - services
+      - endpoints
+      - pods
+      - configmaps
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["discovery.k8s.io"]
+    resources:
+      - endpointslices
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources:
+      - ingresses
+    verbs: ["get", "list", "watch"]
+  - nonResourceURLs: ["/metrics"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "observability.prometheus.fullname" . }}
+  labels:
+    {{- include "observability.prometheus.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "observability.prometheus.fullname" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ default (include "observability.prometheus.fullname" .) .Values.prometheus.serviceAccount.name }}
+    namespace: {{ include "observability.namespace" . }}
+{{- end }}

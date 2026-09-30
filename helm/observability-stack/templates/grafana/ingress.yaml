@@ -1,0 +1,95 @@
+{{- if and .Values.grafana.enabled .Values.grafana.ingress.enabled }}
+{{- if and .Values.grafana.managedCertificate.enabled .Values.grafana.ingress.host }}
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: {{ .Values.grafana.managedCertificate.name }}
+  namespace: {{ include "observability.namespace" . }}
+  labels:
+    {{- include "observability.grafana.labels" . | nindent 4 }}
+spec:
+  domains:
+    - {{ .Values.grafana.ingress.host }}
+---
+{{- end }}
+{{- if .Values.grafana.frontendConfig.enabled }}
+apiVersion: networking.gke.io/v1beta1
+kind: FrontendConfig
+metadata:
+  name: {{ .Values.grafana.frontendConfig.name }}
+  namespace: {{ include "observability.namespace" . }}
+  labels:
+    {{- include "observability.grafana.labels" . | nindent 4 }}
+spec:
+  redirectToHttps:
+    enabled: true
+    responseCodeName: MOVED_PERMANENTLY_DEFAULT
+---
+{{- end }}
+{{- if .Values.grafana.backendConfig.enabled }}
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: {{ .Values.grafana.backendConfig.name }}
+  namespace: {{ include "observability.namespace" . }}
+  labels:
+    {{- include "observability.grafana.labels" . | nindent 4 }}
+spec:
+  timeoutSec: {{ .Values.grafana.backendConfig.timeoutSec }}
+  healthCheck:
+    checkIntervalSec: {{ .Values.grafana.backendConfig.healthCheck.checkIntervalSec }}
+    timeoutSec: {{ .Values.grafana.backendConfig.healthCheck.timeoutSec }}
+    type: {{ .Values.grafana.backendConfig.healthCheck.type }}
+    requestPath: {{ .Values.grafana.backendConfig.healthCheck.requestPath }}
+    port: {{ .Values.grafana.backendConfig.healthCheck.port }}
+  {{- if .Values.grafana.backendConfig.securityPolicy }}
+  securityPolicy:
+    name: {{ .Values.grafana.backendConfig.securityPolicy }}
+  {{- end }}
+---
+{{- end }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "observability.grafana.fullname" . }}
+  namespace: {{ include "observability.namespace" . }}
+  labels:
+    {{- include "observability.grafana.labels" . | nindent 4 }}
+  annotations:
+    kubernetes.io/ingress.allow-http: "true"
+    {{- with .Values.grafana.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- if .Values.ingress.staticIpName }}
+    kubernetes.io/ingress.global-static-ip-name: {{ .Values.ingress.staticIpName }}
+    {{- end }}
+spec:
+  ingressClassName: {{ .Values.grafana.ingress.className }}
+  defaultBackend:
+    service:
+      name: {{ include "observability.grafana.fullname" . }}
+      port:
+        number: {{ .Values.grafana.service.port }}
+  rules:
+    - http:
+        paths:
+          - path: {{ .Values.grafana.ingress.path }}
+            pathType: {{ .Values.grafana.ingress.pathType }}
+            backend:
+              service:
+                name: {{ include "observability.grafana.fullname" . }}
+                port:
+                  number: {{ .Values.grafana.service.port }}
+    {{- if .Values.grafana.ingress.host }}
+    - host: {{ .Values.grafana.ingress.host }}
+      http:
+        paths:
+          - path: {{ .Values.grafana.ingress.path }}
+            pathType: {{ .Values.grafana.ingress.pathType }}
+            backend:
+              service:
+                name: {{ include "observability.grafana.fullname" . }}
+                port:
+                  number: {{ .Values.grafana.service.port }}
+    {{- end }}
+{{- end }}

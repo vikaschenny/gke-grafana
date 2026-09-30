@@ -1,0 +1,122 @@
+{{- if .Values.prometheus.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "observability.prometheus.fullname" . }}
+  namespace: {{ include "observability.namespace" . }}
+  labels:
+    {{- include "observability.prometheus.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "observability.prometheus.fullname" . }}
+  replicas: {{ .Values.prometheus.replicaCount }}
+  revisionHistoryLimit: 5
+  podManagementPolicy: OrderedReady
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      {{- include "observability.prometheus.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "observability.prometheus.labels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/prometheus/configmap.yaml") . | sha256sum }}
+    spec:
+      {{- include "observability.imagePullSecrets" . | nindent 6 }}
+      serviceAccountName: {{ default (include "observability.prometheus.fullname" .) .Values.prometheus.serviceAccount.name }}
+      automountServiceAccountToken: true
+      {{- if .Values.priorityClass.create }}
+      priorityClassName: {{ .Values.priorityClass.name }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.prometheus.securityContext | nindent 8 }}
+      terminationGracePeriodSeconds: 60
+      {{- with .Values.prometheus.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.prometheus.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.prometheus.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: prometheus
+          image: {{ include "observability.image" (dict "image" .Values.prometheus.image "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.prometheus.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.prometheus.containerSecurityContext | nindent 12 }}
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            - --storage.tsdb.retention.time={{ .Values.prometheus.retention }}
+            - --storage.tsdb.retention.size={{ .Values.prometheus.retentionSize }}
+            - --web.listen-address=0.0.0.0:9090
+            - --web.console.libraries=/usr/share/prometheus/console_libraries
+            - --web.console.templates=/usr/share/prometheus/consoles
+            - --web.enable-admin-api=false
+            {{- if .Values.prometheus.enableLifecycle }}
+            - --web.enable-lifecycle
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: 9090
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 6
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.prometheus.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+              readOnly: true
+            - name: storage
+              mountPath: /prometheus
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "observability.prometheus.fullname" . }}
+        - name: tmp
+          emptyDir: {}
+        {{- if not .Values.prometheus.persistence.enabled }}
+        - name: storage
+          emptyDir: {}
+        {{- end }}
+  {{- if .Values.prometheus.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: storage
+        labels:
+          {{- include "observability.prometheus.selectorLabels" . | nindent 10 }}
+      spec:
+        accessModes:
+          {{- toYaml .Values.prometheus.persistence.accessModes | nindent 10 }}
+        {{- $sc := .Values.prometheus.persistence.storageClass | default .Values.global.storageClass }}
+        {{- if $sc }}
+        storageClassName: {{ $sc | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.prometheus.persistence.size }}
+  {{- end }}
+{{- end }}

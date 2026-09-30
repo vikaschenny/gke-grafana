@@ -1,0 +1,102 @@
+{{- if .Values.nodeExporter.enabled }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "observability.nodeExporter.fullname" . }}
+  namespace: {{ include "observability.namespace" . }}
+  labels:
+    {{- include "observability.nodeExporter.labels" . | nindent 4 }}
+spec:
+  updateStrategy:
+    type: {{ .Values.nodeExporter.updateStrategy.type }}
+    {{- if eq .Values.nodeExporter.updateStrategy.type "RollingUpdate" }}
+    rollingUpdate:
+      maxUnavailable: {{ .Values.nodeExporter.updateStrategy.rollingUpdate.maxUnavailable }}
+    {{- end }}
+  selector:
+    matchLabels:
+      {{- include "observability.nodeExporter.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "observability.nodeExporter.labels" . | nindent 8 }}
+    spec:
+      {{- include "observability.imagePullSecrets" . | nindent 6 }}
+      serviceAccountName: {{ default (include "observability.nodeExporter.fullname" .) .Values.nodeExporter.serviceAccount.name }}
+      automountServiceAccountToken: false
+      hostNetwork: {{ .Values.nodeExporter.hostNetwork }}
+      hostPID: {{ .Values.nodeExporter.hostPID }}
+      dnsPolicy: ClusterFirstWithHostNet
+      {{- if .Values.nodeExporter.priorityClassName }}
+      priorityClassName: {{ .Values.nodeExporter.priorityClassName }}
+      {{- else if .Values.priorityClass.create }}
+      priorityClassName: {{ .Values.priorityClass.name }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.nodeExporter.securityContext | nindent 8 }}
+      {{- with .Values.nodeExporter.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeExporter.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeExporter.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: node-exporter
+          image: {{ include "observability.image" (dict "image" .Values.nodeExporter.image "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.nodeExporter.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.nodeExporter.containerSecurityContext | nindent 12 }}
+          args:
+            {{- toYaml .Values.nodeExporter.extraArgs | nindent 12 }}
+          ports:
+            - name: metrics
+              containerPort: 9100
+              protocol: TCP
+              {{- if .Values.nodeExporter.hostNetwork }}
+              hostPort: 9100
+              {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /
+              port: metrics
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /
+              port: metrics
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.nodeExporter.resources | nindent 12 }}
+          volumeMounts:
+            - name: proc
+              mountPath: /host/proc
+              readOnly: true
+            - name: sys
+              mountPath: /host/sys
+              readOnly: true
+            - name: root
+              mountPath: /host/root
+              readOnly: true
+              mountPropagation: HostToContainer
+      volumes:
+        - name: proc
+          hostPath:
+            path: /proc
+            type: Directory
+        - name: sys
+          hostPath:
+            path: /sys
+            type: Directory
+        - name: root
+          hostPath:
+            path: /
+            type: Directory
+{{- end }}

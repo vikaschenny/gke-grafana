@@ -1,0 +1,61 @@
+# GKE overlay — Grafana is published on the public GCE Ingress IP (HTTP).
+
+global:
+  gcpProjectId: ""
+  storageClass: standard-rwo
+  imagePullSecrets: []
+
+commonLabels:
+  environment: production
+  compliance: mnc-standard
+  cost-center: platform
+  owner: sre
+
+namespace:
+  name: observability
+
+grafana:
+  replicaCount: 1
+  adminPassword: ""
+  # existingSecret: grafana-admin-ext
+  serviceAccount:
+    annotations: {}
+  persistence:
+    storageClass: standard-rwo
+    size: 10Gi
+  ingress:
+    enabled: true
+    className: gce
+    host: ""
+    annotations: {}
+  backendConfig:
+    # Cloud Armor policy (create separately)
+    securityPolicy: ""
+
+prometheus:
+  retention: 15d
+  retentionSize: 40GB
+  serviceAccount:
+    annotations: {}
+  persistence:
+    storageClass: standard-rwo
+    size: 50Gi
+  ingress:
+    enabled: false
+    className: gce
+    host: prometheus.example.com
+    annotations: {}
+  backendConfig:
+    securityPolicy: ""
+
+nodeExporter:
+  ingress:
+    enabled: false
+  # Runs on every node including tainted GPU / spot / Windows-incompatible pools
+  # (Linux nodes only; Windows nodes will stay Pending — add a nodeSelector if mixed)
+  # nodeSelector:
+  #   kubernetes.io/os: linux
+
+networkPolicy:
+  enabled: true
+  defaultDeny: true

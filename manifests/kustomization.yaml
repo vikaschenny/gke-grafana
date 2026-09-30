@@ -1,0 +1,40 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: observability
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: observability-stack
+      app.kubernetes.io/managed-by: kustomize
+      compliance: mnc-standard
+    includeSelectors: false
+# Create grafana-admin before apply:
+# kubectl create secret generic grafana-admin -n observability \
+#   --from-literal=admin-user=admin --from-literal=admin-password='<generated>'
+resources:
+  - 00-namespace.yaml
+  - 01-priorityclass.yaml
+  - 02-resourcequota.yaml
+  - 03-limitrange.yaml
+  - 04-networkpolicies.yaml
+  - grafana/serviceaccount.yaml
+  - grafana/configmap.yaml
+  - grafana/pvc.yaml
+  - grafana/service.yaml
+  - grafana/deployment.yaml
+  - grafana/ingress.yaml
+  - prometheus/serviceaccount.yaml
+  - prometheus/rbac.yaml
+  - prometheus/configmap.yaml
+  - prometheus/service.yaml
+  - prometheus/statefulset.yaml
+  - node-exporter/serviceaccount.yaml
+  - node-exporter/service.yaml
+  - node-exporter/daemonset.yaml
+  - node-exporter/ingress.yaml
+images:
+  - name: grafana/grafana
+    newTag: "11.4.0"
+  - name: prom/prometheus
+    newTag: v2.55.1
+  - name: prom/node-exporter
+    newTag: v1.8.2

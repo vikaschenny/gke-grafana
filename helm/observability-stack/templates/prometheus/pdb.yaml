@@ -1,0 +1,14 @@
+{{- if and .Values.prometheus.enabled .Values.prometheus.podDisruptionBudget.enabled (gt (int .Values.prometheus.replicaCount) 1) }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "observability.prometheus.fullname" . }}
+  namespace: {{ include "observability.namespace" . }}
+  labels:
+    {{- include "observability.prometheus.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.prometheus.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "observability.prometheus.selectorLabels" . | nindent 6 }}
+{{- end }}
