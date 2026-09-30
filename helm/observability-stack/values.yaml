@@ -20,11 +20,11 @@ namespace:
   create: true
   name: observability
   labels:
-    # baseline enforce: Node Exporter needs hostPath/hostNetwork (restricted would block it).
-    # warn/audit stay restricted so Grafana and Prometheus stay CIS-aligned.
-    pod-security.kubernetes.io/enforce: baseline
-    pod-security.kubernetes.io/audit: restricted
-    pod-security.kubernetes.io/warn: restricted
+    # GKE 1.35 baseline:latest blocks hostNetwork/hostPID/hostPath/hostPort.
+    # Node Exporter requires those, so this namespace is privileged.
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/audit: privileged
+    pod-security.kubernetes.io/warn: privileged
     # Node Exporter requires a documented PSS exception at the workload level
     goldilocks.fairwinds.com/enabled: "true"
 
@@ -227,7 +227,7 @@ prometheus:
     runAsUser: 65534
     runAsGroup: 65534
     fsGroup: 65534
-    fsGroupChangePolicy: OnRootMismatch
+    fsGroupChangePolicy: Always
     seccompProfile:
       type: RuntimeDefault
   containerSecurityContext:

@@ -7,7 +7,7 @@ This stack is built to CIS Kubernetes Benchmark and GKE hardening guidance. Use 
 | Control | Implementation |
 | --- | --- |
 | Namespace isolation | Dedicated `observability` namespace |
-| Pod Security | Enforce `baseline`, warn/audit `restricted` |
+| Pod Security | Enforce `privileged` (GKE 1.35 baseline blocks Node Exporter hostPath/hostNetwork) |
 | Least-privilege RBAC | Prometheus ClusterRole is get/list/watch only |
 | No default SA tokens | Grafana and Node Exporter set `automountServiceAccountToken: false` |
 | Non-root + dropped caps | All containers `runAsNonRoot`, `capabilities.drop: ALL` |

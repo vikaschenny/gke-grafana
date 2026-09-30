@@ -179,7 +179,7 @@ Open:
 See [docs/SECURITY.md](docs/SECURITY.md) for the full control map.
 
 - Isolated `observability` namespace
-- Pod Security: enforce **baseline**, warn/audit **restricted**
+- Pod Security: enforce **privileged** so Node Exporter can use hostPath/hostNetwork on GKE 1.35+
 - NetworkPolicy default-deny; Grafana → Prometheus → Node Exporter only
 - Non-root, read-only root filesystem, drop ALL capabilities, RuntimeDefault seccomp
 - Grafana: no signup, no anonymous, HSTS, secure cookies
