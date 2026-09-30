@@ -31,6 +31,14 @@ Node Exporter Ingress is **disabled on purpose**. Host metrics must not be inter
 
 Point `kubectl` at a **GKE Standard** cluster, then run:
 
+```bash
+gcloud container clusters get-credentials CLUSTER --region REGION --project PROJECT
+chmod +x scripts/deploy-gke.sh
+./scripts/deploy-gke.sh
+```
+
+Windows PowerShell:
+
 ```powershell
 gcloud container clusters get-credentials CLUSTER --region REGION --project PROJECT
 .\scripts\deploy-gke.ps1
