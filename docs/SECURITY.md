@@ -20,7 +20,7 @@ This stack is built to CIS Kubernetes Benchmark and GKE hardening guidance. Use 
 | Resource governance | ResourceQuota + LimitRange + requests/limits |
 | Scheduling priority | `observability-critical` PriorityClass |
 | Image pins | Versioned tags, never `latest` |
-| Admin API off | Prometheus `--web.enable-admin-api=false` |
+| Admin API off | Prometheus admin API and lifecycle flags are never enabled |
 | Grafana hardening | No signup, no anonymous, HSTS, secure cookies, no snapshots |
 
 ## Node Exporter exception (required)

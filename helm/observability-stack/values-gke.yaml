@@ -34,7 +34,6 @@ grafana:
 
 prometheus:
   retention: 15d
-  retentionSize: 40GB
   serviceAccount:
     annotations: {}
   persistence:

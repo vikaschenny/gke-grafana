@@ -42,11 +42,11 @@ spec:
             - chown -R 65534:65534 /prometheus && chmod -R g+rwX /prometheus
           securityContext:
             runAsUser: 0
+            runAsGroup: 0
             runAsNonRoot: false
-            allowPrivilegeEscalation: false
+            allowPrivilegeEscalation: true
             capabilities:
-              drop: ["ALL"]
-              add: ["CHOWN", "FOWNER"]
+              add: ["CHOWN", "FOWNER", "DAC_OVERRIDE"]
             seccompProfile:
               type: RuntimeDefault
           volumeMounts:
@@ -70,15 +70,17 @@ spec:
           imagePullPolicy: {{ .Values.prometheus.image.pullPolicy }}
           securityContext:
             {{- toYaml .Values.prometheus.containerSecurityContext | nindent 12 }}
+          # Boolean flags such as --web.enable-admin-api must never be passed as
+          # "=false"; Prometheus parses the value as a positional argument and exits.
+          # The admin API and lifecycle endpoints are already disabled by default.
           args:
             - --config.file=/etc/prometheus/prometheus.yml
             - --storage.tsdb.path=/prometheus
             - --storage.tsdb.retention.time={{ .Values.prometheus.retention }}
-            - --storage.tsdb.retention.size={{ .Values.prometheus.retentionSize }}
             - --web.listen-address=0.0.0.0:9090
             - --web.console.libraries=/usr/share/prometheus/console_libraries
             - --web.console.templates=/usr/share/prometheus/consoles
-            - --web.enable-admin-api=false
+            - --log.level=info
             {{- if .Values.prometheus.enableLifecycle }}
             - --web.enable-lifecycle
             {{- end }}

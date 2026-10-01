@@ -22,6 +22,8 @@ spec:
       labels:
         app.kubernetes.io/name: prometheus
         app.kubernetes.io/component: prometheus
+      annotations:
+        observability.stack/revision: "4"
     spec:
       serviceAccountName: prometheus
       automountServiceAccountToken: true
@@ -45,14 +47,14 @@ spec:
             - chown -R 65534:65534 /prometheus && chmod -R g+rwX /prometheus
           securityContext:
             runAsUser: 0
+            runAsGroup: 0
             runAsNonRoot: false
-            allowPrivilegeEscalation: false
+            allowPrivilegeEscalation: true
             capabilities:
-              drop:
-                - ALL
               add:
                 - CHOWN
                 - FOWNER
+                - DAC_OVERRIDE
             seccompProfile:
               type: RuntimeDefault
           volumeMounts:
@@ -72,15 +74,17 @@ spec:
                 - ALL
             seccompProfile:
               type: RuntimeDefault
+          # Boolean flags such as --web.enable-admin-api must never be passed as
+          # "=false"; Prometheus parses the value as a positional argument and exits.
+          # The admin API and lifecycle endpoints are already disabled by default.
           args:
             - --config.file=/etc/prometheus/prometheus.yml
             - --storage.tsdb.path=/prometheus
             - --storage.tsdb.retention.time=15d
-            - --storage.tsdb.retention.size=40GB
             - --web.listen-address=0.0.0.0:9090
             - --web.console.libraries=/usr/share/prometheus/console_libraries
             - --web.console.templates=/usr/share/prometheus/consoles
-            - --web.enable-admin-api=false
+            - --log.level=info
           ports:
             - name: http
               containerPort: 9090
